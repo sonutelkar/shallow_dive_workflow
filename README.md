@@ -49,6 +49,30 @@ Outputs:
 - `shallow_dive/runner.py` – CLI entry, single/batch execution.
 - `shallow_dive_workflow_phase1_complete.py` – thin entrypoint calling runner.
 
+## Architecture (conceptual)
+- CLI (`main.py`/`shallow_dive_workflow_phase1_complete.py`) parses args → `runner.main`.
+- `runner` builds initial state → `workflow.build_workflow()` → LangGraph executes nodes in sequence.
+- Nodes live in `sections.py`, each:
+  - Pulls data/search via `data_sources.py` (Tavily + FMP stable endpoints).
+  - Adds sources via `citations.add_source` (URL → citation number).
+  - Prepares prompt context with numbered snippets → LLM call (`config.llm`, OpenRouter/OpenAI).
+  - Writes section output back into state.
+- `compile_final_report` stitches all section strings and references into Markdown.
+- Logging (`config.logger`) wraps all steps; env/config and LLM selection in `config.py`.
+
+```mermaid
+flowchart TD
+    CLI["CLI (main.py / shallow_dive_workflow_phase1_complete.py)"] --> RUNNER["runner.main"]
+    RUNNER --> WORKFLOW["workflow.build_workflow() (LangGraph)"]
+    WORKFLOW -->|state| SECTION["sections.py nodes"]
+    SECTION --> DATA["data_sources.py (Tavily + FMP stable)"]
+    SECTION --> CITE["citations.py (add_source)"]
+    SECTION --> LLM["config.llm (OpenRouter/OpenAI)"]
+    SECTION -->|updates| STATE["ShallowDiveState"]
+    STATE --> REPORT["compile_final_report"]
+    REPORT --> OUTPUT["Markdown report + references"]
+```
+
 ## Notes
 - Logging is controlled via `LOG_LEVEL` (default INFO) and emitted to stdout.
 - OpenRouter is used when `OPENROUTER_API_KEY` is set; otherwise falls back to OpenAI.
